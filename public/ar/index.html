@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, 
+viewport-fit=cover" />
+  <title>WebAR</title>
+
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script 
+src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+</head>
+
+<body style="margin:0; overflow:hidden; background:black;">
+  <div id="ui" style="
+    position:fixed; inset:0; display:flex; align-items:center; 
+justify-content:center;
+    background:rgba(0,0,0,.7); z-index:10; color:white; 
+font-family:system-ui;
+  ">
+    <button id="startBtn" style="font-size:18px; padding:14px 18px;">
+      Iniciar AR
+    </button>
+  </div>
+
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets.mind; autoStart: false;"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <a-assets>
+      <video id="video" src="./overlay.mp4" muted loop 
+playsinline></video>
+    </a-assets>
+
+    <a-camera position="0 0 0"></a-camera>
+
+    <a-entity mindar-image-target="targetIndex: 0">
+      <a-plane width="1" height="0.5625" material="src:#video"></a-plane>
+    </a-entity>
+
+  </a-scene>
+
+  <script>
+    const btn = document.getElementById("startBtn");
+    const ui = document.getElementById("ui");
+    const scene = document.querySelector("a-scene");
+    const video = document.getElementById("video");
+
+    btn.onclick = async () => {
+      ui.style.display = "none";
+      await scene.systems["mindar-image-system"].start();
+      video.play();
+    };
+  </script>
+</body>
+</html>
+
+
