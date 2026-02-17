@@ -36,7 +36,12 @@ playsinline></video>
     <a-camera position="0 0 0"></a-camera>
 
     <a-entity mindar-image-target="targetIndex: 0">
-      <a-plane width="1" height="0.5625" material="src:#video"></a-plane>
+      <a-plane
+  position="0 0 0.01"
+  width="1.2537"
+  height="1"
+  material="src:#video; shader: flat; side: double;">
+</a-plane>
     </a-entity>
 
   </a-scene>
