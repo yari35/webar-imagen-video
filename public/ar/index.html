@@ -2,30 +2,27 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, 
-viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>WebAR</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script 
-src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 </head>
 
 <body style="margin:0; overflow:hidden; background:black;">
   <div id="ui" style="
-  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-  flex-direction:column;
-  background:rgba(0,0,0,.7); z-index:10; color:#fff; font-family:system-ui;
-">
-  <button id="startBtn" style="font-size:18px; padding:14px 18px;">
-    Iniciar AR
-  </button>
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    flex-direction:column;
+    background:rgba(0,0,0,.7); z-index:10; color:#fff; font-family:system-ui;
+  ">
+    <button id="startBtn" style="font-size:18px; padding:14px 18px;">
+      Iniciar AR
+    </button>
 
-  <button id="audioBtn" style="font-size:16px; padding:10px 14px; margin-top:10px; display:none;">
-    Activar audio
-  </button>
-</div>
-
+    <button id="audioBtn" style="font-size:16px; padding:10px 14px; margin-top:10px; display:none;">
+      Activar audio
+    </button>
+  </div>
 
   <a-scene
     mindar-image="imageTargetSrc: ./targets.mind; autoStart: false;"
@@ -33,79 +30,70 @@ src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js
     device-orientation-permission-ui="enabled: false">
 
     <a-assets>
-      <video id="video" src="./overlay.mp4" loop playsinline webkit-playsinline preload="auto"></video>
-playsinline></video>
+      <!-- Importante: inicia en muted para permitir play en iOS -->
+      <video
+        id="video"
+        src="./overlay.mp4"
+        loop
+        muted
+        playsinline
+        webkit-playsinline
+        preload="auto"
+      ></video>
     </a-assets>
 
     <a-camera position="0 0 0"></a-camera>
 
     <a-entity mindar-image-target="targetIndex: 0" smooth="true" smoothCount="10">
       <a-plane
-  position="0 0 0.01"
-  width="1.2537"
-  height="1"
-  material="src:#video; shader: flat; side: double;">
-</a-plane>
+        position="0 0 0.01"
+        width="1.2537"
+        height="1"
+        material="src:#video; shader: flat; side: double; transparent: true;">
+      </a-plane>
     </a-entity>
-
   </a-scene>
 
   <script>
-    const btn = document.getElementById("startBtn");
+    const startBtn = document.getElementById("startBtn");
+    const audioBtn = document.getElementById("audioBtn");
     const ui = document.getElementById("ui");
     const scene = document.querySelector("a-scene");
     const video = document.getElementById("video");
 
-    btn.onclick = async () => {
-      ui.style.display = "none";
-      await scene.systems["mindar-image-system"].start();
-      video.play();
-    };
-  <script>
-  const btn = document.getElementById("startBtn");
-  const audioBtn = document.getElementById("audioBtn");
-  const ui = document.getElementById("ui");
-  const scene = document.querySelector("a-scene");
-  const video = document.getElementById("video");
+    startBtn.addEventListener("click", async () => {
+      // 1) iniciar tracking/cámara
+      try {
+        await scene.systems["mindar-image-system"].start();
+      } catch (e) {
+        console.log("MindAR start error:", e);
+        alert("No se pudo iniciar cámara. Revisa permisos.");
+        return;
+      }
 
-  // Primer tap: arranca cámara + tracking y “arma” el video en silencio (para que no falle en iOS)
-  btn.onclick = async () => {
-    try {
-      await scene.systems["mindar-image-system"].start();
-    } catch (e) {
-      console.log("MindAR start error:", e);
-      return;
-    }
+      // 2) warmup en mute (permitido por iOS)
+      try {
+        video.muted = true;
+        await video.play();
+      } catch (e) {
+        console.log("Warmup play blocked:", e);
+      }
 
-    // Warm-up seguro: reproducir en mute dentro del gesto
-    try {
-      video.muted = true;
-      video.volume = 0;
-      await video.play();
-    } catch (e) {
-      console.log("Warmup play blocked:", e);
-    }
+      // 3) mostrar botón de audio (gesto explícito)
+      audioBtn.style.display = "block";
+    });
 
-    // Mostrar botón para habilitar audio (gesto explícito)
-    audioBtn.style.display = "block";
-  };
-
-  // Segundo tap: habilita audio real
-  audioBtn.onclick = async () => {
-    try {
-      video.muted = false;
-      video.volume = 1.0;
-      await video.play();
-    } catch (e) {
-      console.log("Audio play blocked:", e);
-    }
-
-    // Opcional: quitar overlay UI (déjalo si quieres)
-    ui.style.display = "none";
-  };
-</script>
-
+    audioBtn.addEventListener("click", async () => {
+      try {
+        video.muted = false;
+        video.volume = 1.0;
+        await video.play();
+        ui.style.display = "none"; // ocultar overlay ya con audio
+      } catch (e) {
+        console.log("Audio play blocked:", e);
+        alert("iPhone bloqueó audio. Sube volumen / quita silencio y vuelve a tocar.");
+      }
+    });
+  </script>
 </body>
 </html>
-
-
