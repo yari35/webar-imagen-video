@@ -13,15 +13,19 @@ src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js
 
 <body style="margin:0; overflow:hidden; background:black;">
   <div id="ui" style="
-    position:fixed; inset:0; display:flex; align-items:center; 
-justify-content:center;
-    background:rgba(0,0,0,.7); z-index:10; color:white; 
-font-family:system-ui;
-  ">
-    <button id="startBtn" style="font-size:18px; padding:14px 18px;">
-      Iniciar AR
-    </button>
-  </div>
+  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  flex-direction:column;
+  background:rgba(0,0,0,.7); z-index:10; color:#fff; font-family:system-ui;
+">
+  <button id="startBtn" style="font-size:18px; padding:14px 18px;">
+    Iniciar AR
+  </button>
+
+  <button id="audioBtn" style="font-size:16px; padding:10px 14px; margin-top:10px; display:none;">
+    Activar audio
+  </button>
+</div>
+
 
   <a-scene
     mindar-image="imageTargetSrc: ./targets.mind; autoStart: false;"
@@ -29,7 +33,7 @@ font-family:system-ui;
     device-orientation-permission-ui="enabled: false">
 
     <a-assets>
-      <video id="video" src="./overlay.mp4" muted loop 
+      <video id="video" src="./overlay.mp4" loop playsinline webkit-playsinline preload="auto"></video>
 playsinline></video>
     </a-assets>
 
@@ -57,7 +61,50 @@ playsinline></video>
       await scene.systems["mindar-image-system"].start();
       video.play();
     };
-  </script>
+  <script>
+  const btn = document.getElementById("startBtn");
+  const audioBtn = document.getElementById("audioBtn");
+  const ui = document.getElementById("ui");
+  const scene = document.querySelector("a-scene");
+  const video = document.getElementById("video");
+
+  // Primer tap: arranca cámara + tracking y “arma” el video en silencio (para que no falle en iOS)
+  btn.onclick = async () => {
+    try {
+      await scene.systems["mindar-image-system"].start();
+    } catch (e) {
+      console.log("MindAR start error:", e);
+      return;
+    }
+
+    // Warm-up seguro: reproducir en mute dentro del gesto
+    try {
+      video.muted = true;
+      video.volume = 0;
+      await video.play();
+    } catch (e) {
+      console.log("Warmup play blocked:", e);
+    }
+
+    // Mostrar botón para habilitar audio (gesto explícito)
+    audioBtn.style.display = "block";
+  };
+
+  // Segundo tap: habilita audio real
+  audioBtn.onclick = async () => {
+    try {
+      video.muted = false;
+      video.volume = 1.0;
+      await video.play();
+    } catch (e) {
+      console.log("Audio play blocked:", e);
+    }
+
+    // Opcional: quitar overlay UI (déjalo si quieres)
+    ui.style.display = "none";
+  };
+</script>
+
 </body>
 </html>
 
