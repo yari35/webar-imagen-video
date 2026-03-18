@@ -31,8 +31,9 @@
     renderer="alpha: true; antialias: true; colorManagement: true;">
 
     <a-assets>
+      <!-- Video color -->
       <video
-        id="video"
+        id="rgb"
         src="./overlay.mp4"
         loop
         muted
@@ -42,30 +43,32 @@
         crossorigin="anonymous"
       ></video>
 
-      <!-- Máscara PNG con transparencia -->
-      <img id="mask" src="./mask.png" crossorigin="anonymous" />
+      <!-- Video alpha / matte -->
+      <video
+        id="alpha"
+        src="./senora_alpha.mp4"
+        loop
+        muted
+        playsinline
+        webkit-playsinline
+        preload="auto"
+        crossorigin="anonymous"
+      ></video>
+
+      <!-- Canvas donde combinamos ambos -->
+      <canvas id="compositeCanvas" width="720" height="1280"></canvas>
     </a-assets>
 
     <a-camera position="0 0 0"></a-camera>
 
-    <a-entity mindar-image-target="targetIndex: 0" smooth="true" smoothCount="10">
-      
-      <!-- VIDEO -->
+    <a-entity id="target0" mindar-image-target="targetIndex: 0" smooth="true" smoothCount="10">
       <a-plane
+        id="videoPlane"
         position="0 0 0.01"
         width="1.2537"
         height="1"
-        material="src:#video; shader: flat; side: double; transparent: true; alphaTest: 0.01;">
+        material="src:#compositeCanvas; shader: flat; side: double; transparent: true;">
       </a-plane>
-
-      <!-- MÁSCARA ENCIMA -->
-      <a-plane
-        position="0 0 0.02"
-        width="1.2537"
-        height="1"
-        material="src:#mask; shader: flat; side: double; transparent: true; alphaTest: 0.01;">
-      </a-plane>
-
     </a-entity>
   </a-scene>
 
@@ -74,38 +77,130 @@
     const audioBtn = document.getElementById("audioBtn");
     const ui = document.getElementById("ui");
     const scene = document.querySelector("a-scene");
-    const video = document.getElementById("video");
+    const target = document.getElementById("target0");
+
+    const rgb = document.getElementById("rgb");
+    const alpha = document.getElementById("alpha");
+    const canvas = document.getElementById("compositeCanvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    let trackingStarted = false;
+    let targetVisible = false;
+
+    function compositeVideos() {
+      const w = canvas.width;
+      const h = canvas.height;
+
+      if (rgb.readyState >= 2 && alpha.readyState >= 2) {
+        ctx.clearRect(0, 0, w, h);
+
+        // 1. Dibujar RGB
+        ctx.drawImage(rgb, 0, 0, w, h);
+        const rgbFrame = ctx.getImageData(0, 0, w, h);
+
+        // 2. Dibujar ALPHA
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(alpha, 0, 0, w, h);
+        const alphaFrame = ctx.getImageData(0, 0, w, h);
+
+        // 3. Mezclar: usar canal rojo del alpha como transparencia
+        const rgbData = rgbFrame.data;
+        const alphaData = alphaFrame.data;
+
+        for (let i = 0; i < rgbData.length; i += 4) {
+          rgbData[i + 3] = alphaData[i];
+        }
+
+        // 4. Escribir frame final
+        ctx.clearRect(0, 0, w, h);
+        ctx.putImageData(rgbFrame, 0, 0);
+      }
+
+      requestAnimationFrame(compositeVideos);
+    }
+
+    async function warmupVideos() {
+      try {
+        rgb.muted = true;
+        alpha.muted = true;
+
+        await rgb.play();
+        await alpha.play();
+
+        rgb.pause();
+        alpha.pause();
+
+        rgb.currentTime = 0;
+        alpha.currentTime = 0;
+      } catch (e) {
+        console.log("Warmup blocked:", e);
+      }
+    }
+
+    async function playBothMuted() {
+      try {
+        rgb.muted = true;
+        alpha.muted = true;
+        await rgb.play();
+        await alpha.play();
+      } catch (e) {
+        console.log("Play muted failed:", e);
+      }
+    }
+
+    function pauseBoth() {
+      rgb.pause();
+      alpha.pause();
+      rgb.currentTime = 0;
+      alpha.currentTime = 0;
+    }
 
     startBtn.addEventListener("click", async () => {
-      try {
-        await scene.systems["mindar-image-system"].start();
-      } catch (e) {
-        console.log("MindAR start error:", e);
-        alert("No se pudo iniciar cámara. Revisa permisos.");
-        return;
+      if (!trackingStarted) {
+        try {
+          await scene.systems["mindar-image-system"].start();
+          trackingStarted = true;
+        } catch (e) {
+          console.log("MindAR start error:", e);
+          alert("No se pudo iniciar cámara. Revisa permisos.");
+          return;
+        }
       }
 
-      try {
-        video.muted = true;
-        await video.play();
-      } catch (e) {
-        console.log("Warmup play blocked:", e);
-      }
-
+      await warmupVideos();
       audioBtn.style.display = "block";
     });
 
     audioBtn.addEventListener("click", async () => {
       try {
-        video.muted = false;
-        video.volume = 1.0;
-        await video.play();
+        // Solo RGB lleva audio
+        rgb.muted = false;
+        rgb.volume = 1.0;
+        alpha.muted = true;
+
+        if (targetVisible) {
+          await rgb.play();
+          await alpha.play();
+        }
+
         ui.style.display = "none";
       } catch (e) {
         console.log("Audio play blocked:", e);
         alert("iPhone bloqueó audio. Sube volumen / quita silencio y vuelve a tocar.");
       }
     });
+
+    target.addEventListener("targetFound", async () => {
+      targetVisible = true;
+      await playBothMuted();
+    });
+
+    target.addEventListener("targetLost", () => {
+      targetVisible = false;
+      pauseBoth();
+    });
+
+    compositeVideos();
   </script>
 </body>
 </html>
