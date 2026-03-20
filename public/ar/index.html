@@ -38,7 +38,6 @@
     renderer="alpha: true; antialias: true; colorManagement: true;">
 
     <a-assets>
-      <!-- RGB -->
       <video
         id="rgb"
         src="./overlay.mp4"
@@ -47,42 +46,22 @@
         playsinline
         webkit-playsinline
         preload="auto"
-        crossorigin="anonymous">
-      </video>
+      ></video>
 
-      <!-- ALPHA -->
-      <video
-        id="alpha"
-        src="./senora_alpha.mp4"
-        loop
-        muted
-        playsinline
-        webkit-playsinline
-        preload="auto"
-        crossorigin="anonymous">
-      </video>
-
-      <!-- Canvas compuesto -->
-      <canvas id="compositeCanvas" width="720" height="1280"></canvas>
+      <canvas id="canvas" width="720" height="1280"></canvas>
     </a-assets>
 
     <a-camera position="0 0 0"></a-camera>
 
-    <a-entity
-      id="target0"
-      mindar-image-target="targetIndex: 0"
-      smooth="true"
-      smoothCount="10">
-
+    <a-entity id="target0" mindar-image-target="targetIndex: 0">
       <a-plane
-        id="videoPlane"
         position="0 0 0.01"
         width="1.2537"
         height="1"
-        material="src:#compositeCanvas; shader: flat; side: double; transparent: true;">
+        material="src:#canvas; shader: flat; side: double;">
       </a-plane>
-
     </a-entity>
+
   </a-scene>
 
   <script>
@@ -90,147 +69,43 @@
     const audioBtn = document.getElementById("audioBtn");
     const ui = document.getElementById("ui");
     const scene = document.querySelector("a-scene");
-    const target = document.getElementById("target0");
 
     const rgb = document.getElementById("rgb");
-    const alpha = document.getElementById("alpha");
-    const canvas = document.getElementById("compositeCanvas");
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
 
-    let trackingStarted = false;
-    let targetVisible = false;
-    let audioEnabled = false;
-    let videosUnlocked = false;
-
-    function compositeVideos() {
-      const w = canvas.width;
-      const h = canvas.height;
-
-      if (rgb.readyState >= 2 && alpha.readyState >= 2) {
-        ctx.clearRect(0, 0, w, h);
-
-        // dibuja RGB
-        ctx.drawImage(rgb, 0, 0, w, h);
-        const rgbFrame = ctx.getImageData(0, 0, w, h);
-
-        // dibuja ALPHA
-        ctx.clearRect(0, 0, w, h);
-        ctx.drawImage(alpha, 0, 0, w, h);
-        const alphaFrame = ctx.getImageData(0, 0, w, h);
-
-        // mezcla alpha
-        const rgbData = rgbFrame.data;
-        const alphaData = alphaFrame.data;
-
-        for (let i = 0; i < rgbData.length; i += 4) {
-          rgbData[i + 3] = alphaData[i];
-        }
-
-        ctx.clearRect(0, 0, w, h);
-        ctx.putImageData(rgbFrame, 0, 0);
+    function render() {
+      if (rgb.readyState >= 2) {
+        ctx.drawImage(rgb, 0, 0, canvas.width, canvas.height);
       }
-
-      requestAnimationFrame(compositeVideos);
-    }
-
-    async function unlockVideos() {
-      try {
-        rgb.muted = true;
-        alpha.muted = true;
-
-        await rgb.play();
-        await alpha.play();
-
-        rgb.pause();
-        alpha.pause();
-
-        rgb.currentTime = 0;
-        alpha.currentTime = 0;
-
-        videosUnlocked = true;
-        console.log("Videos unlocked");
-      } catch (e) {
-        console.log("Unlock failed:", e);
-      }
-    }
-
-    async function playVideos() {
-      try {
-        if (audioEnabled) {
-          rgb.muted = false;
-          rgb.volume = 1.0;
-        } else {
-          rgb.muted = true;
-        }
-
-        alpha.muted = true;
-
-        await rgb.play();
-        await alpha.play();
-
-        console.log("Videos playing");
-      } catch (e) {
-        console.log("Play failed:", e);
-      }
-    }
-
-    function pauseVideos() {
-      rgb.pause();
-      alpha.pause();
-      console.log("Videos paused");
+      requestAnimationFrame(render);
     }
 
     startBtn.addEventListener("click", async () => {
       try {
-        if (!trackingStarted) {
-          await scene.systems["mindar-image-system"].start();
-          trackingStarted = true;
-          console.log("Tracking started");
-        }
+        await scene.systems["mindar-image-system"].start();
 
-        await unlockVideos();
+        rgb.muted = true;
+        await rgb.play();
+
         audioBtn.style.display = "block";
       } catch (e) {
-        console.log("MindAR start error:", e);
-        alert("No se pudo iniciar cámara. Revisa permisos.");
+        alert("Error al iniciar cámara");
       }
     });
 
     audioBtn.addEventListener("click", async () => {
       try {
-        audioEnabled = true;
         rgb.muted = false;
         rgb.volume = 1.0;
-        alpha.muted = true;
-
-        if (targetVisible) {
-          await playVideos();
-        }
-
+        await rgb.play();
         ui.style.display = "none";
-        console.log("Audio enabled");
       } catch (e) {
-        console.log("Audio enable failed:", e);
-        alert("iPhone bloqueó el audio. Quita el modo silencio, sube volumen y vuelve a tocar.");
+        alert("iPhone bloqueó el audio");
       }
     });
 
-    target.addEventListener("targetFound", async () => {
-      targetVisible = true;
-      console.log("Target found");
-
-      if (videosUnlocked) {
-        await playVideos();
-      }
-    });
-
-    target.addEventListener("targetLost", () => {
-      targetVisible = false;
-      console.log("Target lost");
-      pauseVideos();
-    });
-
-    compositeVideos();
+    render();
   </script>
 </body>
 </html>
