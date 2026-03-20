@@ -11,15 +11,22 @@
 
 <body style="margin:0; overflow:hidden; background:black;">
   <div id="ui" style="
-    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    position:fixed;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
     flex-direction:column;
-    background:rgba(0,0,0,.7); z-index:10; color:#fff; font-family:system-ui;
+    background:rgba(0,0,0,.7);
+    z-index:10;
+    color:#fff;
+    font-family:system-ui;
   ">
-    <button id="startBtn" style="font-size:18px; padding:14px 18px;">
+    <button id="startBtn" style="font-size:18px; padding:14px 18px; margin-bottom:10px;">
       Iniciar AR
     </button>
 
-    <button id="audioBtn" style="font-size:16px; padding:10px 14px; margin-top:10px; display:none;">
+    <button id="audioBtn" style="font-size:16px; padding:10px 14px; display:none;">
       Activar audio
     </button>
   </div>
@@ -31,7 +38,7 @@
     renderer="alpha: true; antialias: true; colorManagement: true;">
 
     <a-assets>
-      <!-- Video color -->
+      <!-- RGB -->
       <video
         id="rgb"
         src="./overlay.mp4"
@@ -40,10 +47,10 @@
         playsinline
         webkit-playsinline
         preload="auto"
-        crossorigin="anonymous"
-      ></video>
+        crossorigin="anonymous">
+      </video>
 
-      <!-- Video alpha / matte -->
+      <!-- ALPHA -->
       <video
         id="alpha"
         src="./senora_alpha.mp4"
@@ -52,16 +59,21 @@
         playsinline
         webkit-playsinline
         preload="auto"
-        crossorigin="anonymous"
-      ></video>
+        crossorigin="anonymous">
+      </video>
 
-      <!-- Canvas donde combinamos ambos -->
+      <!-- Canvas compuesto -->
       <canvas id="compositeCanvas" width="720" height="1280"></canvas>
     </a-assets>
 
     <a-camera position="0 0 0"></a-camera>
 
-    <a-entity id="target0" mindar-image-target="targetIndex: 0" smooth="true" smoothCount="10">
+    <a-entity
+      id="target0"
+      mindar-image-target="targetIndex: 0"
+      smooth="true"
+      smoothCount="10">
+
       <a-plane
         id="videoPlane"
         position="0 0 0.01"
@@ -69,6 +81,7 @@
         height="1"
         material="src:#compositeCanvas; shader: flat; side: double; transparent: true;">
       </a-plane>
+
     </a-entity>
   </a-scene>
 
@@ -86,6 +99,8 @@
 
     let trackingStarted = false;
     let targetVisible = false;
+    let audioEnabled = false;
+    let videosUnlocked = false;
 
     function compositeVideos() {
       const w = canvas.width;
@@ -94,16 +109,16 @@
       if (rgb.readyState >= 2 && alpha.readyState >= 2) {
         ctx.clearRect(0, 0, w, h);
 
-        // 1. Dibujar RGB
+        // dibuja RGB
         ctx.drawImage(rgb, 0, 0, w, h);
         const rgbFrame = ctx.getImageData(0, 0, w, h);
 
-        // 2. Dibujar ALPHA
+        // dibuja ALPHA
         ctx.clearRect(0, 0, w, h);
         ctx.drawImage(alpha, 0, 0, w, h);
         const alphaFrame = ctx.getImageData(0, 0, w, h);
 
-        // 3. Mezclar: usar canal rojo del alpha como transparencia
+        // mezcla alpha
         const rgbData = rgbFrame.data;
         const alphaData = alphaFrame.data;
 
@@ -111,7 +126,6 @@
           rgbData[i + 3] = alphaData[i];
         }
 
-        // 4. Escribir frame final
         ctx.clearRect(0, 0, w, h);
         ctx.putImageData(rgbFrame, 0, 0);
       }
@@ -119,7 +133,7 @@
       requestAnimationFrame(compositeVideos);
     }
 
-    async function warmupVideos() {
+    async function unlockVideos() {
       try {
         rgb.muted = true;
         alpha.muted = true;
@@ -132,72 +146,88 @@
 
         rgb.currentTime = 0;
         alpha.currentTime = 0;
+
+        videosUnlocked = true;
+        console.log("Videos unlocked");
       } catch (e) {
-        console.log("Warmup blocked:", e);
+        console.log("Unlock failed:", e);
       }
     }
 
-    async function playBothMuted() {
+    async function playVideos() {
       try {
-        rgb.muted = true;
+        if (audioEnabled) {
+          rgb.muted = false;
+          rgb.volume = 1.0;
+        } else {
+          rgb.muted = true;
+        }
+
         alpha.muted = true;
+
         await rgb.play();
         await alpha.play();
+
+        console.log("Videos playing");
       } catch (e) {
-        console.log("Play muted failed:", e);
+        console.log("Play failed:", e);
       }
     }
 
-    function pauseBoth() {
+    function pauseVideos() {
       rgb.pause();
       alpha.pause();
-      rgb.currentTime = 0;
-      alpha.currentTime = 0;
+      console.log("Videos paused");
     }
 
     startBtn.addEventListener("click", async () => {
-      if (!trackingStarted) {
-        try {
+      try {
+        if (!trackingStarted) {
           await scene.systems["mindar-image-system"].start();
           trackingStarted = true;
-        } catch (e) {
-          console.log("MindAR start error:", e);
-          alert("No se pudo iniciar cámara. Revisa permisos.");
-          return;
+          console.log("Tracking started");
         }
-      }
 
-      await warmupVideos();
-      audioBtn.style.display = "block";
+        await unlockVideos();
+        audioBtn.style.display = "block";
+      } catch (e) {
+        console.log("MindAR start error:", e);
+        alert("No se pudo iniciar cámara. Revisa permisos.");
+      }
     });
 
     audioBtn.addEventListener("click", async () => {
       try {
-        // Solo RGB lleva audio
+        audioEnabled = true;
         rgb.muted = false;
         rgb.volume = 1.0;
         alpha.muted = true;
 
         if (targetVisible) {
-          await rgb.play();
-          await alpha.play();
+          await playVideos();
         }
 
         ui.style.display = "none";
+        console.log("Audio enabled");
       } catch (e) {
-        console.log("Audio play blocked:", e);
-        alert("iPhone bloqueó audio. Sube volumen / quita silencio y vuelve a tocar.");
+        console.log("Audio enable failed:", e);
+        alert("iPhone bloqueó el audio. Quita el modo silencio, sube volumen y vuelve a tocar.");
       }
     });
 
     target.addEventListener("targetFound", async () => {
       targetVisible = true;
-      await playBothMuted();
+      console.log("Target found");
+
+      if (videosUnlocked) {
+        await playVideos();
+      }
     });
 
     target.addEventListener("targetLost", () => {
       targetVisible = false;
-      pauseBoth();
+      console.log("Target lost");
+      pauseVideos();
     });
 
     compositeVideos();
